@@ -7,39 +7,40 @@ from app.models.user import User, UserRole
 
 security = HTTPBearer()
 
+
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ) -> User:
     """Отримати поточного авторизованого користувача"""
     token = credentials.credentials
     payload = decode_access_token(token)
-    
+
     if payload is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials",
         )
-    
+
     email: str = payload.get("sub")
     if email is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials",
         )
-    
+
     user = db.query(User).filter(User.email == email).first()
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
         )
-    
+
     return user
 
 
 def get_current_active_instructor(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ) -> User:
     """Перевірка, що користувач є інструктором"""
     if current_user.role not in [UserRole.INSTRUCTOR, UserRole.ADMIN]:
@@ -50,9 +51,7 @@ def get_current_active_instructor(
     return current_user
 
 
-def get_current_active_admin(
-    current_user: User = Depends(get_current_user)
-) -> User:
+def get_current_active_admin(current_user: User = Depends(get_current_user)) -> User:
     """Перевірка, що користувач є адміністратором"""
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(

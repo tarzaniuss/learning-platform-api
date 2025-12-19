@@ -1,6 +1,8 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
+
+from app.schemas.test import Test
 
 
 class LessonBase(BaseModel):
@@ -27,9 +29,9 @@ class Lesson(LessonBase):
     id: int
     course_id: int
     created_at: datetime
+    tests: List[Test] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class LessonWithCompletion(Lesson):

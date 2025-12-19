@@ -29,6 +29,7 @@ class CourseUpdate(BaseModel):
 class Course(CourseBase):
     id: int
     instructor_id: int
+    is_enrolled: bool = False
     created_at: datetime
 
     class Config:

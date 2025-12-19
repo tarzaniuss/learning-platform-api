@@ -1,4 +1,13 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, Enum
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Text,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Enum,
+)
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import enum
@@ -24,6 +33,12 @@ class Course(Base):
     is_published = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    instructor = relationship("User", back_populates="created_courses", foreign_keys=[instructor_id])
-    lessons = relationship("Lesson", back_populates="course", cascade="all, delete-orphan")
-    enrollments = relationship("Enrollment", back_populates="course")
+    instructor = relationship(
+        "User", back_populates="created_courses", foreign_keys=[instructor_id]
+    )
+    lessons = relationship(
+        "Lesson", back_populates="course", cascade="all, delete-orphan"
+    )
+    enrollments = relationship(
+        "Enrollment", back_populates="course", cascade="all, delete-orphan"
+    )

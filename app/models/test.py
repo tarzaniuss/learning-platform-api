@@ -1,4 +1,15 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, Enum, JSON, Float
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Text,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Enum,
+    JSON,
+    Float,
+)
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import enum
@@ -23,8 +34,13 @@ class Test(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     lesson = relationship("Lesson", back_populates="tests")
-    questions = relationship("Question", back_populates="test", cascade="all, delete-orphan")
-    attempts = relationship("TestAttempt", back_populates="test")
+    questions = relationship(
+        "Question", back_populates="test", cascade="all, delete-orphan"
+    )
+
+    attempts = relationship(
+        "TestAttempt", back_populates="test", cascade="all, delete-orphan"
+    )
 
 
 class Question(Base):
@@ -38,7 +54,9 @@ class Question(Base):
     order_index = Column(Integer, nullable=False)
 
     test = relationship("Test", back_populates="questions")
-    answer_options = relationship("AnswerOption", back_populates="question", cascade="all, delete-orphan")
+    answer_options = relationship(
+        "AnswerOption", back_populates="question", cascade="all, delete-orphan"
+    )
 
 
 class AnswerOption(Base):

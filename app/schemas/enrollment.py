@@ -1,3 +1,4 @@
+from app.schemas.course import Course
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
@@ -14,6 +15,7 @@ class Enrollment(BaseModel):
     enrolled_at: datetime
     completed_at: Optional[datetime] = None
     progress_percentage: float
+    course: Course
 
     class Config:
         from_attributes = True
