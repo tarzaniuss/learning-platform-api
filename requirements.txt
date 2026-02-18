@@ -1,7 +1,7 @@
 fastapi
 uvicorn[standard]
 sqlalchemy
-psycopg2-binary
+asyncpg
 alembic
 python-jose[cryptography]
 passlib[bcrypt]
@@ -11,3 +11,8 @@ pydantic-settings
 python-dotenv
 pydantic[email]
 bcrypt==4.3.0
+sqladmin
+alembic
+pytest
+pytest-asyncio
+httpx

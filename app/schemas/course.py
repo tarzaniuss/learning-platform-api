@@ -1,6 +1,8 @@
-from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
+
+from pydantic import BaseModel, ConfigDict
+
 from app.models.course import DifficultyLevel
 
 
@@ -26,16 +28,15 @@ class CourseUpdate(BaseModel):
     is_published: Optional[bool] = None
 
 
-class Course(CourseBase):
+class CourseRead(CourseBase):
     id: int
     instructor_id: int
     is_enrolled: bool = False
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
-class CourseWithLessonsCount(Course):
+class CourseWithLessonsCount(CourseRead):
     lessons_count: int
     enrolled_students_count: int

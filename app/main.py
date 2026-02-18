@@ -1,14 +1,29 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.database import engine, Base
-from app.api.v1 import auth, courses, lessons, enrollments, tests
 
-Base.metadata.create_all(bind=engine)
+from app.admin import setup_admin_no_auth
+from app.api.v1 import auth, courses, enrollments, lessons, tests
+from app.database import Base, engine
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifecycle manager for FastAPI"""
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    yield
+
+    await engine.dispose()
+
 
 app = FastAPI(
     title="Learning Platform API",
     description="API для платформи онлайн-навчання",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -26,15 +41,14 @@ app.include_router(enrollments.router, prefix="/api/v1")
 app.include_router(tests.router, prefix="/api/v1")
 
 
+admin = setup_admin_no_auth(app, engine)
+
+
 @app.get("/")
-def root():
-    return {
-        "message": "Learning Platform API",
-        "docs": "/docs",
-        "version": "1.0.0"
-    }
+async def root():
+    return {"message": "Learning Platform API", "docs": "/docs", "version": "1.0.0"}
 
 
 @app.get("/health")
-def health_check():
+async def health_check():
     return {"status": "ok"}

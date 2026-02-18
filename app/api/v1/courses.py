@@ -1,39 +1,43 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
 from typing import List
-from app.database import get_db
-from app.schemas.course import Course, CourseCreate, CourseUpdate
-from app.models.enrollment import Enrollment as EnrollmentModel
+
+from fastapi import APIRouter, HTTPException, status
+from sqlalchemy import select
+
+from app.api.deps import CurrentInstructor, CurrentUser, DbSession
 from app.models.course import Course as CourseModel
-from app.models.user import User
-from app.api.deps import get_current_active_instructor, get_current_user
+from app.models.enrollment import Enrollment as EnrollmentModel
+from app.schemas.course import CourseCreate, CourseRead, CourseUpdate
 
 router = APIRouter(prefix="/courses", tags=["Courses"])
 
 
-@router.get("/", response_model=List[Course])
-def get_courses(
+@router.get("/", response_model=List[CourseRead])
+async def get_courses(
     skip: int = 0,
     limit: int = 100,
     is_published: bool = True,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: DbSession = None,
+    current_user: CurrentUser = None,
 ):
-    """Отримати список курсів (каталог)"""
-    query = db.query(CourseModel)
-    query = db.query(CourseModel)
-    if is_published:
-        query = query.filter(CourseModel.is_published)
+    """Get a list of courses (catalog)"""
 
-    courses = query.offset(skip).limit(limit).all()
+    stmt = select(CourseModel)
+    if is_published:
+        stmt = stmt.where(CourseModel.is_published)
+
+    stmt = stmt.offset(skip).limit(limit)
+
+    result = await db.execute(stmt)
+    courses = result.scalars().all()
 
     enrolled_course_ids = set()
     if current_user:
+        enrollment_stmt = select(EnrollmentModel.course_id).where(
+            EnrollmentModel.user_id == current_user.id
+        )
+        enrollment_result = await db.execute(enrollment_stmt)
         enrolled_course_ids = {
-            e.course_id
-            for e in db.query(EnrollmentModel.course_id)
-            .filter(EnrollmentModel.user_id == current_user.id)
-            .all()
+            course_id for course_id in enrollment_result.scalars().all()
         }
 
     for course in courses:
@@ -42,59 +46,66 @@ def get_courses(
     return courses
 
 
-@router.get("/{course_id}", response_model=Course)
-def get_course(
+@router.get("/{course_id}", response_model=CourseRead)
+async def get_course(
     course_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: DbSession = None,
+    current_user: CurrentUser = None,
 ):
-    """Отримати деталі курсу"""
-    course = db.query(CourseModel).filter(CourseModel.id == course_id).first()
+    """Get course details by ID"""
+
+    stmt = select(CourseModel).where(CourseModel.id == course_id)
+    result = await db.execute(stmt)
+    course = result.scalar_one_or_none()
+
     if not course:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Course not found"
         )
+
     is_enrolled = False
     if current_user:
-        is_enrolled = (
-            db.query(EnrollmentModel)
-            .filter(
-                EnrollmentModel.user_id == current_user.id,
-                EnrollmentModel.course_id == course_id,
-            )
-            .first()
-            is not None
+        enrollment_stmt = select(EnrollmentModel).where(
+            EnrollmentModel.user_id == current_user.id,
+            EnrollmentModel.course_id == course_id,
         )
+        enrollment_result = await db.execute(enrollment_stmt)
+        is_enrolled = enrollment_result.scalar_one_or_none() is not None
+
     course.is_enrolled = is_enrolled
 
     return course
 
 
-@router.post("/", response_model=Course, status_code=status.HTTP_201_CREATED)
-def create_course(
+@router.post("/", response_model=CourseRead, status_code=status.HTTP_201_CREATED)
+async def create_course(
     course_data: CourseCreate,
-    current_user: User = Depends(get_current_active_instructor),
-    db: Session = Depends(get_db),
+    current_user: CurrentInstructor = None,
+    db: DbSession = None,
 ):
-    """Створити новий курс (тільки для інструкторів)"""
+    """Create a new course (instructors only)"""
+
     db_course = CourseModel(**course_data.model_dump(), instructor_id=current_user.id)
 
     db.add(db_course)
-    db.commit()
-    db.refresh(db_course)
+    await db.commit()
+    await db.refresh(db_course)
 
     return db_course
 
 
-@router.put("/{course_id}", response_model=Course)
-def update_course(
+@router.put("/{course_id}", response_model=CourseRead)
+async def update_course(
     course_id: int,
     course_data: CourseUpdate,
-    current_user: User = Depends(get_current_active_instructor),
-    db: Session = Depends(get_db),
+    current_user: CurrentInstructor = None,
+    db: DbSession = None,
 ):
-    """Оновити курс"""
-    course = db.query(CourseModel).filter(CourseModel.id == course_id).first()
+    """Update an existing course"""
+
+    stmt = select(CourseModel).where(CourseModel.id == course_id)
+    result = await db.execute(stmt)
+    course = result.scalar_one_or_none()
 
     if not course:
         raise HTTPException(
@@ -110,20 +121,23 @@ def update_course(
     for field, value in update_data.items():
         setattr(course, field, value)
 
-    db.commit()
-    db.refresh(course)
+    await db.commit()
+    await db.refresh(course)
 
     return course
 
 
 @router.delete("/{course_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_course(
+async def delete_course(
     course_id: int,
-    current_user: User = Depends(get_current_active_instructor),
-    db: Session = Depends(get_db),
+    current_user: CurrentInstructor = None,
+    db: DbSession = None,
 ):
-    """Видалити курс"""
-    course = db.query(CourseModel).filter(CourseModel.id == course_id).first()
+    """Delete a course"""
+
+    stmt = select(CourseModel).where(CourseModel.id == course_id)
+    result = await db.execute(stmt)
+    course = result.scalar_one_or_none()
 
     if not course:
         raise HTTPException(
@@ -135,7 +149,7 @@ def delete_course(
             status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions"
         )
 
-    db.delete(course)
-    db.commit()
+    await db.delete(course)
+    await db.commit()
 
     return None

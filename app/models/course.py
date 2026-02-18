@@ -1,17 +1,15 @@
-from sqlalchemy import (
-    Column,
-    Integer,
-    String,
-    Text,
-    Boolean,
-    DateTime,
-    ForeignKey,
-    Enum,
-)
-from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
 import enum
+from datetime import datetime
+from typing import TYPE_CHECKING, List, Optional
+
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql import func
+
 from app.database import Base
+
+if TYPE_CHECKING:
+    from models import Enrollment, Lesson, User
 
 
 class DifficultyLevel(str, enum.Enum):
@@ -23,22 +21,26 @@ class DifficultyLevel(str, enum.Enum):
 class Course(Base):
     __tablename__ = "courses"
 
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, nullable=False, index=True)
-    description = Column(Text)
-    instructor_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    duration_hours = Column(Integer)
-    category = Column(String)
-    difficulty_level = Column(Enum(DifficultyLevel), default=DifficultyLevel.BEGINNER)
-    is_published = Column(Boolean, default=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String, index=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    instructor_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    duration_hours: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    category: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    difficulty_level: Mapped[DifficultyLevel] = mapped_column(
+        Enum(DifficultyLevel), default=DifficultyLevel.BEGINNER
+    )
+    is_published: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
-    instructor = relationship(
+    instructor: Mapped["User"] = relationship(
         "User", back_populates="created_courses", foreign_keys=[instructor_id]
     )
-    lessons = relationship(
+    lessons: Mapped[List["Lesson"]] = relationship(
         "Lesson", back_populates="course", cascade="all, delete-orphan"
     )
-    enrollments = relationship(
+    enrollments: Mapped[List["Enrollment"]] = relationship(
         "Enrollment", back_populates="course", cascade="all, delete-orphan"
     )

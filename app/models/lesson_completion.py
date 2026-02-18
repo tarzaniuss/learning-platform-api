@@ -1,19 +1,29 @@
-from sqlalchemy import Column, Integer, DateTime, ForeignKey, UniqueConstraint
+from datetime import datetime
+from typing import TYPE_CHECKING, Optional
+
+from sqlalchemy import DateTime, ForeignKey, Integer, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
+
 from app.database import Base
+
+if TYPE_CHECKING:
+    from models import Lesson, User
+
 
 class LessonCompletion(Base):
     __tablename__ = "lesson_completions"
     __table_args__ = (
-        UniqueConstraint('user_id', 'lesson_id', name='unique_user_lesson'),
+        UniqueConstraint("user_id", "lesson_id", name="unique_user_lesson"),
     )
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    lesson_id = Column(Integer, ForeignKey("lessons.id"), nullable=False)
-    completed_at = Column(DateTime(timezone=True), server_default=func.now())
-    time_spent_minutes = Column(Integer, nullable=True)
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    lesson_id: Mapped[int] = mapped_column(ForeignKey("lessons.id"))
+    completed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    time_spent_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
-    user = relationship("User", back_populates="lesson_completions")
-    lesson = relationship("Lesson", back_populates="completions")
+    user: Mapped["User"] = relationship("User", back_populates="lesson_completions")
+    lesson: Mapped["Lesson"] = relationship("Lesson", back_populates="completions")

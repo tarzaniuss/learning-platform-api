@@ -1,18 +1,24 @@
+from typing import Annotated
+
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
-from app.database import get_db
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.security import decode_access_token
+from app.database import get_db
 from app.models.user import User, UserRole
 
 security = HTTPBearer()
 
+DbSession = Annotated[AsyncSession, Depends(get_db)]
 
-def get_current_user(
+
+async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db),
+    db: DbSession = None,
 ) -> User:
-    """Отримати поточного авторизованого користувача"""
+    """Retrieve the currently authorized user"""
     token = credentials.credentials
     payload = decode_access_token(token)
 
@@ -29,7 +35,10 @@ def get_current_user(
             detail="Invalid authentication credentials",
         )
 
-    user = db.query(User).filter(User.email == email).first()
+    stmt = select(User).where(User.email == email)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -39,10 +48,13 @@ def get_current_user(
     return user
 
 
-def get_current_active_instructor(
-    current_user: User = Depends(get_current_user),
+CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+async def get_current_active_instructor(
+    current_user: CurrentUser,
 ) -> User:
-    """Перевірка, що користувач є інструктором"""
+    """Verify that the user is an instructor or an admin"""
     if current_user.role not in [UserRole.INSTRUCTOR, UserRole.ADMIN]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -51,11 +63,19 @@ def get_current_active_instructor(
     return current_user
 
 
-def get_current_active_admin(current_user: User = Depends(get_current_user)) -> User:
-    """Перевірка, що користувач є адміністратором"""
+CurrentInstructor = Annotated[User, Depends(get_current_active_instructor)]
+
+
+async def get_current_active_admin(
+    current_user: CurrentUser,
+) -> User:
+    """Verify that the user is an administrator"""
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions",
         )
     return current_user
+
+
+CurrentAdmin = Annotated[User, Depends(get_current_active_admin)]

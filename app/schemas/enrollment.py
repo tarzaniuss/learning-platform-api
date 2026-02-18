@@ -1,24 +1,25 @@
-from app.schemas.course import Course
-from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
+
+from pydantic import BaseModel, ConfigDict
+
+from app.schemas.course import CourseRead
 
 
 class EnrollmentCreate(BaseModel):
     course_id: int
 
 
-class Enrollment(BaseModel):
+class EnrollmentRead(BaseModel):
     id: int
     user_id: int
     course_id: int
     enrolled_at: datetime
     completed_at: Optional[datetime] = None
     progress_percentage: float
-    course: Course
+    course: CourseRead
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class LessonCompletionCreate(BaseModel):
@@ -26,12 +27,11 @@ class LessonCompletionCreate(BaseModel):
     time_spent_minutes: Optional[int] = None
 
 
-class LessonCompletion(BaseModel):
+class LessonCompletionRead(BaseModel):
     id: int
     user_id: int
     lesson_id: int
     completed_at: datetime
     time_spent_minutes: Optional[int] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

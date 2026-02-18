@@ -1,48 +1,42 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from typing import List
 from datetime import datetime, timezone
-from app.database import get_db
-from app.schemas.enrollment import (
-    Enrollment,
-    EnrollmentCreate,
-    LessonCompletionCreate,
-    LessonCompletion,
-)
-from app.models.enrollment import Enrollment as EnrollmentModel
-from app.models.lesson_completion import LessonCompletion as LessonCompletionModel
+from typing import List
+
+from fastapi import APIRouter, HTTPException, status
+from sqlalchemy import func, select
+
+from app.api.deps import CurrentUser, DbSession
 from app.models.course import Course as CourseModel
+from app.models.enrollment import Enrollment as EnrollmentModel
 from app.models.lesson import Lesson as LessonModel
-from app.models.user import User
-from app.api.deps import get_current_user
+from app.models.lesson_completion import LessonCompletion as LessonCompletionModel
+from app.schemas.enrollment import (
+    EnrollmentCreate,
+    EnrollmentRead,
+    LessonCompletionCreate,
+    LessonCompletionRead,
+)
 
 router = APIRouter(prefix="/enrollments", tags=["Enrollments"])
 
 
-@router.get("/my", response_model=List[Enrollment])
-def get_my_enrollments(
-    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
-):
-    """Отримати мої записи на курси"""
-    return (
-        db.query(EnrollmentModel)
-        .filter(EnrollmentModel.user_id == current_user.id)
-        .all()
-    )
+@router.get("/my", response_model=List[EnrollmentRead])
+async def get_my_enrollments(current_user: CurrentUser = None, db: DbSession = None):
+    """Get all course enrollments for the current user"""
+    stmt = select(EnrollmentModel).where(EnrollmentModel.user_id == current_user.id)
+    result = await db.execute(stmt)
+    return result.scalars().all()
 
 
-@router.post("/", response_model=Enrollment, status_code=status.HTTP_201_CREATED)
-def enroll_in_course(
+@router.post("/", response_model=EnrollmentRead, status_code=status.HTTP_201_CREATED)
+async def enroll_in_course(
     enrollment_data: EnrollmentCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: CurrentUser = None,
+    db: DbSession = None,
 ):
-    """Записатися на курс"""
-    course = (
-        db.query(CourseModel)
-        .filter(CourseModel.id == enrollment_data.course_id)
-        .first()
-    )
+    """Enroll the current user in a course"""
+    course_stmt = select(CourseModel).where(CourseModel.id == enrollment_data.course_id)
+    course_result = await db.execute(course_stmt)
+    course = course_result.scalar_one_or_none()
 
     if not course:
         raise HTTPException(
@@ -54,14 +48,12 @@ def enroll_in_course(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Course is not published"
         )
 
-    existing = (
-        db.query(EnrollmentModel)
-        .filter(
-            EnrollmentModel.user_id == current_user.id,
-            EnrollmentModel.course_id == enrollment_data.course_id,
-        )
-        .first()
+    existing_stmt = select(EnrollmentModel).where(
+        EnrollmentModel.user_id == current_user.id,
+        EnrollmentModel.course_id == enrollment_data.course_id,
     )
+    existing_result = await db.execute(existing_stmt)
+    existing = existing_result.scalar_one_or_none()
 
     if existing:
         raise HTTPException(
@@ -76,38 +68,34 @@ def enroll_in_course(
     )
 
     db.add(enrollment)
-    db.commit()
-    db.refresh(enrollment)
+    await db.commit()
+    await db.refresh(enrollment)
 
     return enrollment
 
 
-@router.post("/lessons/complete", response_model=LessonCompletion)
-def complete_lesson(
+@router.post("/lessons/complete", response_model=LessonCompletionRead)
+async def complete_lesson(
     completion_data: LessonCompletionCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: CurrentUser = None,
+    db: DbSession = None,
 ):
-    """Відмітити урок як виконаний"""
-    lesson = (
-        db.query(LessonModel)
-        .filter(LessonModel.id == completion_data.lesson_id)
-        .first()
-    )
+    """Mark a specific lesson as completed and update course progress"""
+    lesson_stmt = select(LessonModel).where(LessonModel.id == completion_data.lesson_id)
+    lesson_result = await db.execute(lesson_stmt)
+    lesson = lesson_result.scalar_one_or_none()
 
     if not lesson:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Lesson not found"
         )
 
-    enrollment = (
-        db.query(EnrollmentModel)
-        .filter(
-            EnrollmentModel.user_id == current_user.id,
-            EnrollmentModel.course_id == lesson.course_id,
-        )
-        .first()
+    enrollment_stmt = select(EnrollmentModel).where(
+        EnrollmentModel.user_id == current_user.id,
+        EnrollmentModel.course_id == lesson.course_id,
     )
+    enrollment_result = await db.execute(enrollment_stmt)
+    enrollment = enrollment_result.scalar_one_or_none()
 
     if not enrollment:
         raise HTTPException(
@@ -115,14 +103,12 @@ def complete_lesson(
             detail="Not enrolled in this course",
         )
 
-    existing = (
-        db.query(LessonCompletionModel)
-        .filter(
-            LessonCompletionModel.user_id == current_user.id,
-            LessonCompletionModel.lesson_id == completion_data.lesson_id,
-        )
-        .first()
+    existing_stmt = select(LessonCompletionModel).where(
+        LessonCompletionModel.user_id == current_user.id,
+        LessonCompletionModel.lesson_id == completion_data.lesson_id,
     )
+    existing_result = await db.execute(existing_stmt)
+    existing = existing_result.scalar_one_or_none()
 
     if existing:
         raise HTTPException(
@@ -137,66 +123,75 @@ def complete_lesson(
 
     db.add(completion)
 
-    total_lessons = (
-        db.query(LessonModel).filter(LessonModel.course_id == lesson.course_id).count()
+    total_lessons_stmt = (
+        select(func.count())
+        .select_from(LessonModel)
+        .where(LessonModel.course_id == lesson.course_id)
     )
+    total_lessons_result = await db.execute(total_lessons_stmt)
+    total_lessons = total_lessons_result.scalar()
 
-    completed_lessons = (
-        db.query(LessonCompletionModel)
+    completed_lessons_stmt = (
+        select(func.count())
+        .select_from(LessonCompletionModel)
         .join(LessonModel)
-        .filter(
+        .where(
             LessonCompletionModel.user_id == current_user.id,
             LessonModel.course_id == lesson.course_id,
         )
-        .count()
-        + 1
     )
+    completed_lessons_result = await db.execute(completed_lessons_stmt)
+    completed_lessons = completed_lessons_result.scalar() + 1
 
     enrollment.progress_percentage = (completed_lessons / total_lessons) * 100
 
     if enrollment.progress_percentage >= 100:
         enrollment.completed_at = datetime.now(timezone.utc)
 
-    db.commit()
-    db.refresh(completion)
+    await db.commit()
+    await db.refresh(completion)
 
     return completion
 
 
 @router.get("/course/{course_id}/progress")
-def get_course_progress(
+async def get_course_progress(
     course_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: CurrentUser = None,
+    db: DbSession = None,
 ):
-    """Отримати прогрес по курсу"""
-    enrollment = (
-        db.query(EnrollmentModel)
-        .filter(
-            EnrollmentModel.user_id == current_user.id,
-            EnrollmentModel.course_id == course_id,
-        )
-        .first()
+    """Get detailed progress for a specific course"""
+    enrollment_stmt = select(EnrollmentModel).where(
+        EnrollmentModel.user_id == current_user.id,
+        EnrollmentModel.course_id == course_id,
     )
+    enrollment_result = await db.execute(enrollment_stmt)
+    enrollment = enrollment_result.scalar_one_or_none()
 
     if not enrollment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Not enrolled in this course"
         )
 
-    total_lessons = (
-        db.query(LessonModel).filter(LessonModel.course_id == course_id).count()
+    total_lessons_stmt = (
+        select(func.count())
+        .select_from(LessonModel)
+        .where(LessonModel.course_id == course_id)
     )
+    total_lessons_result = await db.execute(total_lessons_stmt)
+    total_lessons = total_lessons_result.scalar()
 
-    completed_lessons = (
-        db.query(LessonCompletionModel)
+    completed_lessons_stmt = (
+        select(func.count())
+        .select_from(LessonCompletionModel)
         .join(LessonModel)
-        .filter(
+        .where(
             LessonCompletionModel.user_id == current_user.id,
             LessonModel.course_id == course_id,
         )
-        .count()
     )
+    completed_lessons_result = await db.execute(completed_lessons_stmt)
+    completed_lessons = completed_lessons_result.scalar()
 
     return {
         "enrollment_id": enrollment.id,

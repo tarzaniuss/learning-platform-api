@@ -1,6 +1,8 @@
-from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, ConfigDict
+
 from app.models.test import QuestionType
 
 
@@ -14,12 +16,11 @@ class AnswerOptionCreate(AnswerOptionBase):
     pass
 
 
-class AnswerOption(AnswerOptionBase):
+class AnswerOptionRead(AnswerOptionBase):
     id: int
     question_id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class QuestionBase(BaseModel):
@@ -33,13 +34,12 @@ class QuestionCreate(QuestionBase):
     answer_options: List[AnswerOptionCreate] = []
 
 
-class Question(QuestionBase):
+class QuestionRead(QuestionBase):
     id: int
     test_id: int
-    answer_options: List[AnswerOption] = []
+    answer_options: List[AnswerOptionRead] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TestBase(BaseModel):
@@ -61,14 +61,13 @@ class TestUpdate(BaseModel):
     time_limit_minutes: Optional[int] = None
 
 
-class Test(TestBase):
+class TestRead(TestBase):
     id: int
     lesson_id: int
     created_at: datetime
-    questions: List[Question] = []
+    questions: List[QuestionRead] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TestAttemptCreate(BaseModel):
@@ -76,7 +75,7 @@ class TestAttemptCreate(BaseModel):
     answers_data: Dict[str, Any]
 
 
-class TestAttempt(BaseModel):
+class TestAttemptRead(BaseModel):
     id: int
     user_id: int
     test_id: int
@@ -87,5 +86,4 @@ class TestAttempt(BaseModel):
     time_spent_minutes: Optional[int] = None
     answers_data: Dict[str, Any]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

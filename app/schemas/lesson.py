@@ -1,8 +1,9 @@
-from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 from typing import List, Optional
 
-from app.schemas.test import Test
+from pydantic import BaseModel, ConfigDict
+
+from app.schemas.test import TestRead
 
 
 class LessonBase(BaseModel):
@@ -25,14 +26,14 @@ class LessonUpdate(BaseModel):
     duration_minutes: Optional[int] = None
 
 
-class Lesson(LessonBase):
+class LessonRead(LessonBase):
     id: int
     course_id: int
     created_at: datetime
-    tests: List[Test] = []
+    tests: List[TestRead] = []
 
     model_config = ConfigDict(from_attributes=True)
 
 
-class LessonWithCompletion(Lesson):
+class LessonWithCompletionRead(LessonRead):
     is_completed: bool = False
